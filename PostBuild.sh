@@ -33,6 +33,7 @@ mkdir $DIR_DEST
 echo Creating portable package:
 echo "  Copy files from Output"
 cp $DIR_OUTPUT/{HitCounterManager.exe,HitCounterManager.exe.config} $DIR_DEST
+cp $DIR_OUTPUT/{System.Buffers.dll,System.Memory.dll,System.Numerics.Vectors.dll,System.Resources.Extensions.dll,System.Runtime.CompilerServices.Unsafe.dll} $DIR_DEST
 echo "  Copy files from Sources"
 cp $DIR_SRC/Sources/{HitCounterManagerInit.xml,HitCounter.html,HitCounter.template,HitCounterManagerMono.sh} $DIR_DEST
 echo "  Copy files from Designs"
