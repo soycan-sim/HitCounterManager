@@ -23,17 +23,5 @@
 using System.Reflection;
 using System.Runtime.InteropServices;
 
-[assembly: AssemblyTitle("HitCounterManager")]
-[assembly: AssemblyDescription("Manages a hit counter")]
-[assembly: AssemblyConfiguration("")]
-[assembly: AssemblyCompany("")]
-[assembly: AssemblyProduct("HitCounterManager")]
-[assembly: AssemblyCopyright("Copyright © Peter Kirmeier 2023")]
-[assembly: AssemblyTrademark("")]
-[assembly: AssemblyCulture("")]
-
-[assembly: AssemblyVersion("1.21.0.0")]
-[assembly: AssemblyFileVersion("1.21.0.0")]
-
 [assembly: ComVisible(false)]
 [assembly: Guid("348b28b3-0290-4274-93aa-aa52be387120")]
