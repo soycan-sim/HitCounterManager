@@ -25,12 +25,21 @@ using System.Collections.Generic;
 
 namespace HitCounterManager
 {
+    [Serializable]
+    public enum TitleType
+    {
+        DEFAULT,
+        CYCLE,
+        RANDOMIZE,
+    }
+
     /// <summary>
     /// A row as part of a profile (used for a row at datagridview)
     /// </summary>
     [Serializable]
     public class ProfileRow
     {
+        public TitleType TitleType = TitleType.DEFAULT;
         public string Title = "";
         public int Hits = 0;
         public int WayHits = 0;
@@ -81,7 +90,7 @@ namespace HitCounterManager
             profile = null;
             return false;
         }
-        
+
         /// <summary>
         /// Returns a list of all available internally cached profile names
         /// </summary>
@@ -120,7 +129,16 @@ namespace HitCounterManager
                 pi_dst.AttemptsCount = prof.Attempts;
                 foreach (ProfileRow row in prof.Rows)
                 {
-                    pi_dst.AddSplit(row.Title, row.Hits, row.WayHits, row.PB, row.Duration, row.DurationPB, row.DurationGold);
+                    switch (row.TitleType)
+                    {
+                        case TitleType.DEFAULT:
+                            pi_dst.AddSplit(row.Title, row.Hits, row.WayHits, row.PB, row.Duration, row.DurationPB, row.DurationGold);
+                            break;
+                        case TitleType.CYCLE:
+                        case TitleType.RANDOMIZE:
+                            pi_dst.AddSplit(row.TitleType, new List<string>(row.Title.Split(';')), row.Hits, row.WayHits, row.PB, row.Duration, row.DurationPB, row.DurationGold);
+                            break;
+                    }
                 }
                 pi_dst.ActiveSplit = prof.ActiveSplit;
                 pi_dst.SetSessionProgress(prof.GetSessionProgress(), true);
@@ -156,7 +174,19 @@ namespace HitCounterManager
             for (int r = 0; r < pi_src.SplitCount; r++)
             {
                 ProfileRow ProfileRow = new ProfileRow();
-                ProfileRow.Title = pi_src.GetSplitTitle(r);
+                TitleType type;
+                List<string> titles = pi_src.GetSplitTitleRaw(r, out type);
+                ProfileRow.TitleType = type;
+                switch (type)
+                {
+                    case TitleType.DEFAULT:
+                        ProfileRow.Title = titles.Count == 0 ? "" : titles[0];
+                        break;
+                    case TitleType.CYCLE:
+                    case TitleType.RANDOMIZE:
+                        ProfileRow.Title = string.Join(";", titles);
+                        break;
+                }
                 ProfileRow.Hits = pi_src.GetSplitHits(r);
                 ProfileRow.WayHits = pi_src.GetSplitWayHits(r);
                 ProfileRow.PB = pi_src.GetSplitPB(r);
@@ -174,7 +204,7 @@ namespace HitCounterManager
         public void DeleteProfile(string Name)
         {
             Profile prof;
-            if (_FindProfile(Name, out prof)) _Profiles.Remove(prof); 
+            if (_FindProfile(Name, out prof)) _Profiles.Remove(prof);
         }
 
         /// <summary>
@@ -241,6 +271,18 @@ namespace HitCounterManager
         /// <param name="DurationPB">Milliseconds of the split's personal best duration</param>
         /// <param name="DurationGold">Milliseconds of the split's all times best duration</param>
         void AddSplit(string Title, int Hits, int WayHits, int PB, long Duration, long DurationPB, long DurationGold);
+        /// <summary>
+        /// Add split
+        /// </summary>
+        /// <param name="TitleType">Either default, cycling or randomized titles</param>
+        /// <param name="Title">Array of Title</param>
+        /// <param name="Hits">Amount of hits at nosses (or all)</param>
+        /// <param name="WaysHits">Amount of hits on the way</param>
+        /// <param name="PB">Amount of personal best hits</param>
+        /// <param name="Duration">Milliseconds of the split's duration</param>
+        /// <param name="DurationPB">Milliseconds of the split's personal best duration</param>
+        /// <param name="DurationGold">Milliseconds of the split's all times best duration</param>
+        void AddSplit(TitleType TitleType, List<string> Title, int Hits, int WayHits, int PB, long Duration, long DurationPB, long DurationGold);
         /// <summary>
         /// Insert a new split before the current one
         /// </summary>
@@ -311,6 +353,13 @@ namespace HitCounterManager
         /// <param name="Index">Index</param>
         /// <returns>Title</returns>
         string GetSplitTitle(int Index);
+        /// <summary>
+        /// Gets the title of a split
+        /// </summary>
+        /// <param name="Index">Index</param>
+        /// <param name="Type">Type of the title</param>
+        /// <returns>Array of titles</returns>
+        List<string> GetSplitTitleRaw(int Index, out TitleType Type);
         /// <summary>
         /// Gets the hit counts (boss) of a split
         /// </summary>

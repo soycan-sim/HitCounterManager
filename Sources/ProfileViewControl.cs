@@ -265,7 +265,7 @@ namespace HitCounterManager
             }
             else if ((e.ColumnIndex == Rows[0].Cells["cHits"].ColumnIndex) ||
                      (e.ColumnIndex == Rows[0].Cells["cWayHits"].ColumnIndex) ||
-                     (e.ColumnIndex == Rows[0].Cells["cPB"].ColumnIndex) )
+                     (e.ColumnIndex == Rows[0].Cells["cPB"].ColumnIndex))
             {
                 SetSplitDiff(e.RowIndex, GetSplitHits(e.RowIndex) + GetSplitWayHits(e.RowIndex) - GetSplitPB(e.RowIndex));
             }
@@ -333,10 +333,13 @@ namespace HitCounterManager
 
         #region IProfileInfo implementation
 
-        private class HiddenRowData {
+        private class HiddenRowData
+        {
             public long Duration = 0;
             public long DurationPB = 0;
             public long DurationGold = 0;
+            public TitleType TitleType = TitleType.DEFAULT;
+            public int TitleIndex = 0;
 
             public HiddenRowData() { }
             public HiddenRowData(long Duration, long DurationPB, long DurationGold)
@@ -345,6 +348,13 @@ namespace HitCounterManager
                 this.DurationPB = DurationPB;
                 this.DurationGold = DurationGold;
             }
+            public HiddenRowData(long Duration, long DurationPB, long DurationGold, TitleType TitleType)
+            {
+                this.Duration = Duration;
+                this.DurationPB = DurationPB;
+                this.DurationGold = DurationGold;
+                this.TitleType = TitleType;
+            }
         }
 
         private string _ProfileName = null;
@@ -352,6 +362,7 @@ namespace HitCounterManager
         private int LastActiveSplit = -1;
         private uint DataUpdatePending = 0;
         private bool RunCompleted = false;
+        private Random rng = new Random();
 
         [Browsable(false)] // Hide from designer
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)] // Hide from designer generator
@@ -368,7 +379,7 @@ namespace HitCounterManager
                 }
             }
         }
-        
+
         [Browsable(false)] // Hide from designer
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)] // Hide from designer generator
         public int AttemptsCount
@@ -388,7 +399,7 @@ namespace HitCounterManager
         [Browsable(false)] // Hide from designer
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)] // Hide from designer generator
         public int SplitCount { get { return RowCount - 1; } } // Remove the "new line"
-        
+
         [Browsable(false)] // Hide from designer
         [DesignerSerializationVisibility(DesignerSerializationVisibility.Hidden)] // Hide from designer generator
         public int ActiveSplit
@@ -418,6 +429,14 @@ namespace HitCounterManager
         {
             ProfileUpdateBegin();
             Rows[Rows.Add(new object[] { Title, Hits, WayHits, Hits + WayHits - PB, PB, false })].Tag = new HiddenRowData(Duration, DurationPB, DurationGold);
+            ProfileUpdateEnd();
+        }
+        public void AddSplit(TitleType Type, List<string> Title, int Hits, int WayHits, int PB, long Duration, long DurationPB, long DurationGold)
+        {
+            ProfileUpdateBegin();
+            string prefix = Type == TitleType.DEFAULT ? "" : Type + ":";
+            string title = prefix + string.Join(";", Title);
+            Rows[Rows.Add(new object[] { title, Hits, WayHits, Hits + WayHits - PB, PB, false })].Tag = new HiddenRowData(Duration, DurationPB, DurationGold, Type);
             ProfileUpdateEnd();
         }
         public void InsertSplit()
@@ -474,6 +493,31 @@ namespace HitCounterManager
                 SetSplitHits(r, 0);
                 SetSplitWayHits(r, 0);
                 SetSplitDuration(r, 0);
+
+                TitleType type;
+                List<string> titles = GetSplitTitleRaw(r, out type);
+                int currentIndex = GetRowTagData(r).TitleIndex;
+                int nextIndex = currentIndex;
+
+                if (titles.Count > 0)
+                {
+                    switch (type)
+                    {
+                        case TitleType.DEFAULT:
+                            break;
+                        case TitleType.CYCLE:
+                            nextIndex = (currentIndex + 1) % titles.Count;
+                            break;
+                        case TitleType.RANDOMIZE:
+                            while (nextIndex == currentIndex)
+                            {
+                                nextIndex = rng.Next(titles.Count);
+                            }
+                            break;
+                    }
+
+                    GetRowTagData(r).TitleIndex = nextIndex;
+                }
             }
             ActiveSplit = 0;
             ProfileUpdateEnd();
@@ -494,7 +538,7 @@ namespace HitCounterManager
                 SetSplitDurationPB(r, Duration);
             }
             ActiveSplit = Splits;
-            SetSessionProgress(Splits-1);
+            SetSessionProgress(Splits - 1);
             ProfileUpdateEnd();
         }
         public void Hit(int Amount)
@@ -543,7 +587,7 @@ namespace HitCounterManager
                     Rows[Index].Cells[i].Value = Rows[IndexDst].Cells[i].Value;
                     Rows[IndexDst].Cells[i].Value = cell;
                 }
-                
+
                 HiddenRowData data = (HiddenRowData)Rows[Index].Tag;
                 Rows[Index].Tag = Rows[IndexDst].Tag;
                 Rows[IndexDst].Tag = data;
@@ -587,8 +631,72 @@ namespace HitCounterManager
         }
 
         private HiddenRowData GetRowTagData(int Index) { if (null == Rows[Index].Tag) Rows[Index].Tag = new HiddenRowData(); return (HiddenRowData)Rows[Index].Tag; }
-        private T GetCellValueOfType<T>(DataGridViewCell Cell, T Default) {  try { return (null == Cell.Value ? Default : (T)Cell.Value); } catch { return Default; } }
-        public string GetSplitTitle(int Index) { return GetCellValueOfType<string>(Rows[Index].Cells["cTitle"], ""); }
+        private T GetCellValueOfType<T>(DataGridViewCell Cell, T Default) { try { return (null == Cell.Value ? Default : (T)Cell.Value); } catch { return Default; } }
+        public string GetSplitTitle(int Index)
+        {
+            TitleType type;
+            List<string> titles = GetSplitTitleRaw(Index, out type);
+            int currentIndex = GetRowTagData(Index).TitleIndex;
+
+            if (titles.Count == 0)
+            {
+                return "";
+            }
+
+            if (currentIndex >= titles.Count)
+            {
+                currentIndex = titles.Count - 1;
+                GetRowTagData(Index).TitleIndex = currentIndex;
+            }
+
+            switch (type)
+            {
+                case TitleType.DEFAULT:
+                    return titles[0].Trim();
+                case TitleType.CYCLE:
+                case TitleType.RANDOMIZE:
+                    return titles[currentIndex].Trim();
+                default:
+                    return "";
+            }
+
+        }
+        public List<string> GetSplitTitleRaw(int Index, out TitleType Type)
+        {
+            string title = GetCellValueOfType<string>(Rows[Index].Cells["cTitle"], "");
+            if (title.StartsWith("CYCLE:"))
+            {
+                title = title.Substring("CYCLE:".Length);
+
+                if (GetRowTagData(Index).TitleType != TitleType.CYCLE)
+                {
+                    ProfileUpdateBegin();
+                    GetRowTagData(Index).TitleType = TitleType.CYCLE;
+                    ProfileUpdateEnd();
+                }
+            }
+            else if (title.StartsWith("RANDOMIZE:"))
+            {
+                title = title.Substring("RANDOMIZE:".Length);
+
+                if (GetRowTagData(Index).TitleType != TitleType.RANDOMIZE)
+                {
+                    ProfileUpdateBegin();
+                    GetRowTagData(Index).TitleType = TitleType.RANDOMIZE;
+                    ProfileUpdateEnd();
+                }
+            }
+            else if (title.Contains(";"))
+            {
+                ProfileUpdateBegin();
+                Rows[Index].Cells["cTitle"].Value = "CYCLE:" + title;
+                GetRowTagData(Index).TitleType = TitleType.CYCLE;
+                ProfileUpdateEnd();
+            }
+
+            Type = GetRowTagData(Index).TitleType;
+            return new List<string>(title.Split(';'));
+        }
         public int GetSplitHits(int Index) { return GetCellValueOfType<int>(Rows[Index].Cells["cHits"], 0); }
         public int GetSplitWayHits(int Index) { return GetCellValueOfType<int>(Rows[Index].Cells["cWayHits"], 0); }
         public int GetSplitDiff(int Index) { return GetCellValueOfType<int>(Rows[Index].Cells["cDiff"], 0); }
@@ -695,7 +803,7 @@ namespace HitCounterManager
                 }
             }
         }
-        
+
         public event EventHandler<ProfileChangedEventArgs> ProfileChanged;
 
         #endregion
